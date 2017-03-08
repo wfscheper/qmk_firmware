@@ -1,5 +1,6 @@
 #include "ergodox.h"
 #include "led.h"
+#include "mousekey.h"
 #include "debug.h"
 #include "action_layer.h"
 #include "action_util.h"
@@ -8,6 +9,7 @@
 #define SYMB   1 // symbols layer
 #define MDIA   2 // media layer
 #define SPEC   3 // special layer
+#define RBASE  4 // reverse default layer
 
 #define LSymb 10 // left symbol-shift key
 #define LMdia 11 // left media-shift key
@@ -15,6 +17,11 @@
 #define RSymb 13 // right symbol-shift key
 #define RMdia 14 // right media-shift key
 #define RSpec 15 // right special-shift key
+
+#define NotEq 16 // != macro
+#define GrtEq 17 // >= macro
+#define LesEq 18 // <= macro
+#define DeRef 19 // -> macro
 
 #define MUL   20 // mouse up left
 #define MUR   21 // mouse up right
@@ -41,13 +48,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 /******* Base Layer ****************************************************************************************************
  *
  * ,------------------------------------------------------.       ,------------------------------------------------------.
- * | Special `~ |   1  |   2  |   3  |   4  |   5  | ESC  |       |  =+  |   6  |   7  |   8  |   9  |   0  | -_ Special |
+ * | Special `~ |   1  |   2  |   3  |   4  |   5  | ESC  |       |  =+  |   6  |   7  |   8  |   9  |   0  | -_         |
  * |------------+------+------+------+------+-------------|       |------+------+------+------+------+------+------------|
- * | Media  Tab |   Q  |   W  |   E  |   R  |   T  |   [  |       |  ]   |   Y  |   U  |   I  |   O  |   P  | \|   Media |
+ * | Media  Tab |   Q  |   W  |   E  |   R  |   T  |   [  |       |  ]   |   Y  |   U  |   I  |   O  |   P  | \|         |
  * |------------+------+------+------+------+------|      |       |      |------+------+------+------+------+------------|
- * | Symbol ESC |   A  |   S  |   D  |   F  |   G  |------|       |------|   H  |   J  |   K  |   L  |  ;   | '"  Symbol |
+ * | Symbol ESC |   A  |   S  |   D  |   F  |   G  |------|       |------|   H  |   J  |   K  |   L  |  ;   | '"         |
  * |------------+------+------+------+------+------|Shift |       | Tab  |------+------+------+------+------+------------|
- * | Capitals   |   Z  |   X  |   C  |   V  |   B  | -Tab |       |      |   N  |   M  |   ,  |   .  |  /   |   Capitals |
+ * | LShift     |   Z  |   X  |   C  |   V  |   B  | -Tab |       |      |   N  |   M  |   ,  |   .  |  /   | RShift     |
  * `------------+------+------+------+------+-------------'       `-------------+------+------+------+------+------------'
  *      | LCtrl | Meh  |Hyper | LGui | LAlt |                                   | RAlt | RGui | Hyper|  Meh | RCtrl |
  *      `-----------------------------------'                                   `-----------------------------------'
@@ -61,18 +68,18 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
  */
 [BASE] = KEYMAP(
 // left hand
- F(LSpec)  ,KC_1   ,KC_2   ,KC_3   ,KC_4  ,KC_5  ,KC_ESC
+ F(LSpec)  ,KC_1   ,KC_2   ,KC_3   ,KC_4  ,KC_5  ,KC_6
 ,F(LMdia)  ,KC_Q   ,KC_W   ,KC_E   ,KC_R  ,KC_T  ,KC_LBRC
-,M(LSymb)  ,KC_A   ,KC_S   ,KC_D   ,KC_F  ,KC_G
+,F(LSymb)  ,KC_A   ,KC_S   ,KC_D   ,KC_F  ,KC_G
 ,KC_LSFT   ,KC_Z   ,KC_X   ,KC_C   ,KC_V  ,KC_B  ,LSFT(KC_TAB)
 ,KC_LCTL   ,KC_MEH ,KC_HYPR,KC_LGUI,KC_LALT
                                          ,KC_HOME,KC_END
                                                  ,KC_PGUP
                                  ,KC_BSPC,KC_DEL ,KC_PGDN
                                                                   // right hand
-                                                                 ,KC_EQL  ,KC_6   ,KC_7   ,KC_8   ,KC_9    ,KC_0     ,F(RSpec)
-                                                                 ,KC_RBRC ,KC_Y   ,KC_U   ,KC_I   ,KC_O    ,KC_P     ,F(RMdia)
-                                                                          ,KC_H   ,KC_J   ,KC_K   ,KC_L    ,KC_SCLN  ,F(RSymb)
+                                                                 ,KC_EQL  ,KC_6   ,KC_7   ,KC_8   ,KC_9    ,KC_0     ,KC_MINS
+                                                                 ,KC_RBRC ,KC_Y   ,KC_U   ,KC_I   ,KC_O    ,KC_P     ,KC_BSLS
+                                                                          ,KC_H   ,KC_J   ,KC_K   ,KC_L    ,KC_SCLN  ,KC_QUOT
                                                                  ,KC_TAB  ,KC_N   ,KC_M   ,KC_COMM,KC_DOT  ,KC_SLSH  ,KC_RSFT
                                                                                   ,KC_RALT,KC_RGUI,KC_HYPR ,KC_MEH   ,KC_RCTL
                                                                  ,KC_LEFT ,KC_RGHT
@@ -228,22 +235,21 @@ const macro_t *action_get_macro(keyrecord_t *record, uint8_t id, uint8_t opt)
 {
     switch(id) {
         // There are two shift keys for each layer so we increment a layer_shift var when one
-        // is pressed and decrement when one is released. If both are pressed at the same time
-        // then the layer is locked (or unlocked). The shift counts are bound between 0 and 2
+        // is pressed and decrement when one is released. The shift counts are bound between 0 and 2
         // only because sometimes rapid pressing led to irregular events; this way the states
         // are self healing during use.
 
         case LSymb:                                                   //
         if (record->event.pressed) {                                  // when the LSymb button is pressed
-            if (record->tap.count && (!symb_shift) && (!symb_lock)) { // it's just a tap
+            if (record->tap.count && (!symb_shift) && (!symb_lock) && (!spec_shift)) { // it's just a tap
                 register_code(KC_ESC);                                // emit an ESC key
             } else {
-                if(++symb_shift > 2) mdia_shift = 2;                  // increment the symb shift count, max two
+                if(++symb_shift > 2) symb_shift = 2;                  // increment the symb shift count, max two
                 if(spec_shift) symb_lock = !symb_lock;                // if the Special layer is on, toggle the shift lock
                 layer_on(SYMB);                                       // in any case, turn on the Symbols layer
             }
         } else {                                                      // when the LSymb button is released
-            if(record->tap.count && (!symb_shift) && (!symb_lock)) {  // it's just a tap
+            if(record->tap.count && (!symb_shift) && (!symb_lock) && (!spec_shift)) {  // it's just a tap
                 unregister_code(KC_ESC);                              // un-emit an ESC key
             } else {
                 if(--symb_shift < 0) symb_shift = 0;                  // decrement the shift count, minimum zero
@@ -273,7 +279,7 @@ const macro_t *action_get_macro(keyrecord_t *record, uint8_t id, uint8_t opt)
 
         case LSpec:
         if (record->event.pressed) {                                     // when the LSpec button is pressed
-            if(symb_shift) symb_lock == !symb_lock;                      // if another layer button is engaged, then
+            if(symb_shift) symb_lock = !symb_lock;                       // if another layer button is engaged, then
             else if(mdia_shift) mdia_lock = !mdia_lock;                  // lock that layer, be it caps or symb or mdia
             else if (record->tap.count && !record->tap.interrupted && (!spec_shift)) {
                 register_code(KC_GRV);                                   // otherwise, if it's an uninterrupted tap, emit a char
@@ -346,6 +352,30 @@ const macro_t *action_get_macro(keyrecord_t *record, uint8_t id, uint8_t opt)
                 if(--spec_shift < 0) spec_shift = 0;
                 if(!spec_shift) layer_off(SPEC);
             }
+        }
+        break;
+
+        case NotEq:
+        if (record->event.pressed) {
+            return MACRO( I(10), D(LSFT), T(EXLM), U(LSFT), T(EQL), END  ); // !=
+        }
+        break;
+
+        case GrtEq:
+        if (record->event.pressed) {
+            return MACRO( I(10), D(LSFT), T(COMM), U(LSFT), T(EQL), END  ); // <=
+        }
+        break;
+
+        case LesEq:
+        if (record->event.pressed) {
+            return MACRO( I(10), D(LSFT), T(DOT), U(LSFT), T(EQL), END  ); // >=
+        }
+        break;
+
+        case DeRef:
+        if (record->event.pressed) {
+            return MACRO( I(10), T(MINS), D(LSFT), T(DOT), U(LSFT), END  ); // ->
         }
         break;
 
